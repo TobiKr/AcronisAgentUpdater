@@ -2,7 +2,7 @@ terraform {
   required_providers {
     azurerm = {
       source = "hashicorp/azurerm"
-      version = "~> 2.42.0"
+      version = ">= 2.42.0"
     }
   }
 }
@@ -76,7 +76,6 @@ data "azurerm_storage_account_sas" "sas" {
     }
 }
 
-
 resource "azurerm_application_insights" "appinsights" {
   name                = "${var.prefix}-appinsights"
   location            = azurerm_resource_group.rg.location
@@ -116,6 +115,7 @@ resource "azurerm_function_app" "functionapp" {
   storage_account_name       = azurerm_storage_account.storage.name
   storage_account_access_key = azurerm_storage_account.storage.primary_access_key
   https_only                 = true
+  os_type                    = "linux"
   version                    = "~3"
 
   app_settings = {
