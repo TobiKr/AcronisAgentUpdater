@@ -1,7 +1,8 @@
 # AcronisAgentUpdater
 Azure Function to automatically update Acronis Backup Cloud Agents with the following features:
 - Fully automated Deployment
-- Login via Username / Password (protected by Azure KeyVault) into Acronis API
+- Protect Credentials with Azure KeyVault as token based sign in is not supported by Acronis API
+- Exclude specific tenants
 - Identify all agents in signed in tenant
 - Iterate every tenant of every kind (Partner, Customer, Unit, Folder) and identify agents in those sub tenants
 - Update all identified tenants
