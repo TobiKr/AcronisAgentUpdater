@@ -64,7 +64,10 @@ namespace azuregeek.AZAcronisUpdater.AcronisAPI
 
             if(response.StatusCode != HttpStatusCode.OK)
             {
-                throw new Exception($"Error - Received HTTP {response.StatusCode}:{response.StatusDescription}. Response content: {response.Content}");
+                if(response.StatusCode == HttpStatusCode.Forbidden)
+                    throw new Exception($"Error - Unauthorized. Probably wrong username and/or password? Response content: {response.Content}");
+                else
+                    throw new Exception($"Error - Received HTTP {response.StatusCode}:{response.StatusDescription}. Response content: {response.Content}");
             }
 
             JObject responseJson = JObject.Parse(response.Content);

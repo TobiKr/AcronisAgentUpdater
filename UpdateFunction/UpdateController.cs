@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -12,36 +11,54 @@ using azuregeek.AZAcronisUpdater.AcronisAPI;
 using azuregeek.AZAcronisUpdater.AcronisAPI.Models;
 using azuregeek.AZAcronisUpdater.TableStorage;
 using azuregeek.AZAcronisUpdater.TableStorage.Models;
+using azuregeek.AZAcronisUpdater.EMail;
+using MimeKit;
+using MailKit.Security;
 
 namespace azuregeek.AZAcronisUpdater
 {
     public static class UpdateController
     {
+
         [FunctionName("UpdateAllTenantAgents")]
         public static async Task<IActionResult> UpdateAllTenantAgents(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
-            // instantiate environment variables
-            string acronisUsername = GetEnvironmentVariable("AcronisUsername");
-            string acronisPassword = GetEnvironmentVariable("AcronisPassword");
+            // Get Credentials            
             string acronisCloudBaseURL = GetEnvironmentVariable("AcronisCloudBaseURL");
+            string acronisUsername = GetEnvironmentVariable("AcronisUsername");
+            string acronisPassword = GetEnvironmentVariable("AcronisPassword");            
+            string tableStorageConnectionString = GetEnvironmentVariable("AzureWebJobsStorage");
+
+            // Get Mail Settings
+            bool sendMailNotification = Convert.ToBoolean(GetEnvironmentVariable("SendMailNotification"));
+            string mailServer = GetEnvironmentVariable("MailServer", true);
+            int mailServerPort = Convert.ToInt32(GetEnvironmentVariable("MailServerPort", true));
+            bool mailUseTls = Convert.ToBoolean(GetEnvironmentVariable("MailServerUseTls"));
+            bool mailAuthenticated = Convert.ToBoolean(GetEnvironmentVariable("MailAuthenticated"));
+            string mailUsername = GetEnvironmentVariable("MailUsername", true);
+            string mailPassword = GetEnvironmentVariable("MailPassword", true);
+            MailboxAddress mailFromAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailFrom"));
+            MailboxAddress mailToAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailTo"));
+
+            // Get Acronis settings
             string acronisExcludeTenantIds = GetEnvironmentVariable("ExcludeTenantIds", true);
             Int32 apiTimeout = Convert.ToInt32(GetEnvironmentVariable("ApiTimeOut"));
             bool testMode = Convert.ToBoolean(GetEnvironmentVariable("TestMode"));
-            string tableStorageConnectionString = GetEnvironmentVariable("AzureWebJobsStorage");
-
+            
             // define variables
             List<Guid> excludeTenantList = new List<Guid>();
             string updateRunDateTime = DateTime.Now.ToString("s");
+            int agentUpdatedCounter = 0;
 
-            log.LogInformation("C# HTTP trigger function is processing a request.");
-            log.LogDebug($"Using Acronis Username {acronisUsername}");
+            log.LogInformation("C# HTTP trigger function is processing a request.");            
             log.LogDebug($"Using Acronis Base URL {acronisCloudBaseURL}");
             log.LogDebug($"Update Run Timestamp: {updateRunDateTime}");
+            log.LogDebug($"Using Acronis Username {acronisUsername}");
 
             // Get array of excluded tenants
-            if(!string.IsNullOrEmpty(acronisExcludeTenantIds))
+            if (!string.IsNullOrEmpty(acronisExcludeTenantIds))
             {                
                 string[] excludeListStr = acronisExcludeTenantIds.Split(",");
                 foreach(string excludeStr in excludeListStr)
@@ -96,23 +113,24 @@ namespace azuregeek.AZAcronisUpdater
                         foreach (APIAgent agent in agentBag)
                         {
                             if (agent.Online)
-                            {
-                                // !!!!!!!!!!!!!!!!!!!!!!
-                                // CHANGE FOR PRODUCTION
-                                // !!!!!!!!!!!!!!!!!!!!!!
-                                if (!agent.UpdateAvailable)
+                            {                                
+                                if (agent.UpdateAvailable)
                                 {
                                     log.LogInformation($"Updating Agent {agent.Hostname} from version {agent.AgentVersion} to version {agent.AvailableUpdateVersion}");
 
-                                    if (testMode)
-                                    {
-                                        log.LogWarning("Test Mode enabled, skipping update.");
-                                        continue;
+                                    Guid updateActivtiyId = new Guid();
+
+                                    if (!testMode)
+                                    {                                        
+                                        updateActivtiyId = await scopedApiClient.UpdateAgent(agent.AgentID);
+                                        agentUpdatedCounter++;
+                                        log.LogDebug($"Update started - activity ID: {updateActivtiyId}");                                        
                                     }
-                                    Guid updateActivtiyId = await scopedApiClient.UpdateAgent(agent.AgentID);
-                                    log.LogDebug($"Update started - activity ID: {updateActivtiyId}");
+                                    else
+                                        log.LogWarning("Test Mode enabled, skipping update.");                                    
 
                                     var updateEntity = new AgentUpdateEntity(updateRunDateTime, agent.AgentID);
+                                    updateEntity.AgentID = agent.AgentID.ToString();
                                     updateEntity.AgentOS = agent.OS;
                                     updateEntity.AgentVersionAfterUpdate = agent.AvailableUpdateVersion;
                                     updateEntity.AgentVersionBeforeUpdate = agent.AgentVersion;
@@ -143,7 +161,31 @@ namespace azuregeek.AZAcronisUpdater
                 log.LogInformation($"Finished processing tenant ID {tenant.TenantID} / {tenant.Name}");
             }
 
-            return new OkObjectResult("Processed ");
+            // Send E-Mail Notification
+            if (sendMailNotification && agentUpdatedCounter > 0)
+            {
+                log.LogDebug($"E-Mail notification in the making...");
+
+                List<AgentUpdateEntity> updateTable = await tableStorageClient.GetTableDataForUpdateRun(updateRunDateTime);
+                log.LogDebug($"Fetched Table");
+
+                SecureSocketOptions socketOptions = SecureSocketOptions.Auto;
+                if (mailUseTls)
+                    socketOptions = SecureSocketOptions.StartTls;
+
+                EMailController mailController = new EMailController(mailServer,
+                    mailServerPort,
+                    socketOptions,
+                    mailAuthenticated,
+                    mailUsername,
+                    mailPassword);
+
+                mailController.sendAgentUpdateTable(mailFromAddress, mailToAddress, updateTable);
+                log.LogInformation($"Status Mail sent to {mailToAddress}");
+            }            
+            log.LogInformation($"Updated {agentUpdatedCounter} agents :-)");
+
+            return new OkObjectResult("Processed");
         }
 
         // Helper Functions
