@@ -2,10 +2,7 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using azuregeek.AZAcronisUpdater.AcronisAPI;
 using azuregeek.AZAcronisUpdater.AcronisAPI.Models;
@@ -19,10 +16,9 @@ namespace azuregeek.AZAcronisUpdater
 {
     public static class UpdateController
     {
-
         [FunctionName("UpdateAllTenantAgents")]
-        public static async Task<IActionResult> UpdateAllTenantAgents(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
+        public static async Task UpdateAllTenantAgents(
+            [TimerTrigger("%UpdateSchedule%")] TimerInfo timerInfo,
             ILogger log)
         {
             // Get Credentials            
@@ -33,14 +29,6 @@ namespace azuregeek.AZAcronisUpdater
 
             // Get Mail Settings
             bool sendMailNotification = Convert.ToBoolean(GetEnvironmentVariable("SendMailNotification"));
-            string mailServer = GetEnvironmentVariable("MailServer", true);
-            int mailServerPort = Convert.ToInt32(GetEnvironmentVariable("MailServerPort", true));
-            bool mailUseTls = Convert.ToBoolean(GetEnvironmentVariable("MailServerUseTls"));
-            bool mailAuthenticated = Convert.ToBoolean(GetEnvironmentVariable("MailAuthenticated"));
-            string mailUsername = GetEnvironmentVariable("MailUsername", true);
-            string mailPassword = GetEnvironmentVariable("MailPassword", true);
-            MailboxAddress mailFromAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailFrom"));
-            MailboxAddress mailToAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailTo"));
 
             // Get Acronis settings
             string acronisExcludeTenantIds = GetEnvironmentVariable("ExcludeTenantIds", true);
@@ -164,6 +152,15 @@ namespace azuregeek.AZAcronisUpdater
             // Send E-Mail Notification
             if (sendMailNotification && agentUpdatedCounter > 0)
             {
+                string mailServer = GetEnvironmentVariable("MailServer", true);
+                int mailServerPort = Convert.ToInt32(GetEnvironmentVariable("MailServerPort", true));
+                bool mailUseTls = Convert.ToBoolean(GetEnvironmentVariable("MailServerUseTls"));
+                bool mailAuthenticated = Convert.ToBoolean(GetEnvironmentVariable("MailAuthenticated"));
+                string mailUsername = GetEnvironmentVariable("MailUsername", true);
+                string mailPassword = GetEnvironmentVariable("MailPassword", true);
+                MailboxAddress mailFromAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailFrom"));
+                MailboxAddress mailToAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailTo"));
+
                 log.LogDebug($"E-Mail notification in the making...");
 
                 List<AgentUpdateEntity> updateTable = await tableStorageClient.GetTableDataForUpdateRun(updateRunDateTime);
@@ -184,8 +181,6 @@ namespace azuregeek.AZAcronisUpdater
                 log.LogInformation($"Status Mail sent to {mailToAddress}");
             }            
             log.LogInformation($"Updated {agentUpdatedCounter} agents :-)");
-
-            return new OkObjectResult("Processed");
         }
 
         // Helper Functions

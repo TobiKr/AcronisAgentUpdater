@@ -1,0 +1,57 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "UpdateSchedule": {
+            "value": "0 30 11 * * *"
+        },
+        "AcronisUsername": {
+            "value": ""
+        },
+        "AcronisPassword": {
+            "value": "" 
+        },
+        "AcronisCloudBaseURL": {
+            "value": "https://cloud.acronis.com/"
+        },
+        "ApiTimeOut": {
+            "value": 6000
+        },
+        "TestMode": {
+            "value": false
+        },
+        "ExcludeTenantIds": {
+            "value": "" 
+        },
+        "sendMailNotification": {
+            "value": false
+        },
+        "MailServer": {
+            "value": "" 
+        },
+        "MailServerPort": {
+            "value": 587
+        },
+        "MailServerUseTls": {
+            "value": true
+        },
+        "MailAuthenticated": {
+            "value": false
+        },
+        "MailUsername": {
+            "value": "" 
+        },
+        "MailPassword": {
+            "value": "" 
+        },
+        "MailFrom": {
+            "value": "" 
+        },
+        "MailTo": {
+            "value": "" 
+        },
+        "TimeZone": {
+            "value": "W. Europe Standard Time" 
+        }
+    }
+}

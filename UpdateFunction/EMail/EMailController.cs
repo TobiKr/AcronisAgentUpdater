@@ -50,7 +50,7 @@ namespace azuregeek.AZAcronisUpdater.EMail
             htmlBodyBuilder.Append("the following Agents have been updated by <a href=\"https://github.com/TobiKr/AcronisAgentUpdater\">AcronisAgentUpdater</a>:<br />");
             htmlBodyBuilder.Append("<br />");
             htmlBodyBuilder.Append(htmlUpdateTable);            
-            htmlBodyBuilder.Append("<p>Have a great day!<br />your Acronis Agent Updater :-)</p>");
+            htmlBodyBuilder.Append("<p>Have a great day (or night)!<br />your Acronis Agent Updater :-)</p>");
             htmlBodyBuilder.Append("</body>");
             htmlBodyBuilder.Append("</html>");
 
@@ -60,8 +60,13 @@ namespace azuregeek.AZAcronisUpdater.EMail
 
             MimeMessage message = new MimeMessage();
             message.From.Add(fromAddress);
-            message.To.Add(toAddress);
+            message.To.Add(toAddress);            
             message.Body = bodyBuilder.ToMessageBody();
+
+            if(updateTable.Count == 1)
+                message.Subject = $"Acronis Agent Updater updated {updateTable.Count} Agent :-)";
+            else
+                message.Subject = $"Acronis Agent Updater updated {updateTable.Count} Agents :-)";
 
             sendMail(message);
         }

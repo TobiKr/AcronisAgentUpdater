@@ -1,0 +1,347 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "UpdateSchedule": {
+            "type": "string",
+             "defaultValue": "0 30 11 * * *",
+            "metadata": {
+                "description": "Schedule for updates (six field CRON expression)"
+            }
+        },
+        "AcronisUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Admin User name for Acronis Back Cloud (MFA has to be disabled or user marked as service account!)"
+            }
+        },
+        "AcronisPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password for AcronisUsername"
+            }
+        },
+        "AcronisCloudBaseURL": {
+            "type": "string",
+            "defaultValue": "https://cloud.acronis.com/",
+            "metadata": {
+                "description": "URL of Acronis Cloud Service"
+            }
+        },
+        "ApiTimeOut": {
+            "type": "int",
+            "defaultValue": 6000,
+            "metadata": {
+                "description": "API Timeout (milliseconds) used for API calls"
+            }
+        },
+        "TestMode": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "If true, no updates will be executed, just reported"
+            }
+        },
+        "ExcludeTenantIds": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Acronis Tenant IDs to be excluded from Updates, separated by comma"
+            }
+        },
+        "sendMailNotification": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "If true, send email notifications after every run of the function. Mail server options have to be configured."
+            }
+        },
+        "MailServer": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Mail server hostname used to send email notifications"
+            }
+        },
+        "MailServerPort": {
+            "type": "int",
+            "defaultValue": 587,
+            "metadata": {
+                "description": "Mail server port to send email notifications"
+            }
+        },
+        "MailServerUseTls": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "If true, use TLS when talking to mail server"
+            }
+        },
+        "MailAuthenticated": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "If true, use authentication when sending email"
+            }
+        },
+        "MailUsername": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Username of the mail server user to send email notifications. Do not forget to set MailAuthenticated to true"
+            }
+        },
+        "MailPassword": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Password of the mail server user to send email notifications"
+            }
+        },
+        "MailFrom": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Sender address for email notifications"
+            }
+        },
+        "MailTo": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "To address for email notifications"
+            }
+        },
+        "TimeZone": {
+            "type": "string",
+            "defaultValue": "W. Europe Standard Time",
+            "metadata": {
+                "description": "Timezone for function app"
+            }
+        }
+    },
+    "variables": {
+        "resourcesSuffix": "[toLower(substring(uniqueString(concat(subscription().subscriptionId,deployment().name)), 0, 5))]",
+        "storageAccountName": "[concat('stacronisupdate',variables('resourcesSuffix'))]",
+        "appInsightsName": "[concat('appi-acronisupdate-',variables('resourcesSuffix'))]",
+        "functionAppName": "[concat('func-acronisupdate-',variables('resourcesSuffix'))]",
+        "hostingPlanName": "[concat('plan-acronisupdate-',variables('resourcesSuffix'))]",
+        "keyvaultName": "[concat('kv-acronisupdate-',variables('resourcesSuffix'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2019-06-01",            
+            "name": "[variables('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS"
+                }
+        },
+        {
+            "apiVersion": "2015-05-01",
+            "name": "[variables('appInsightsName')]",
+            "type": "Microsoft.Insights/components",
+            "kind": "web",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]": "Resource"
+            },
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('appInsightsName')]"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('functionAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",   
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },            
+            "properties": { 
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": [
+                    {
+                        "name": "FUNCTIONS_WORKER_RUNTIME",
+                        "value": "dotnet"
+                    },
+                    {
+                        "name": "FUNCTIONS_EXTENSION_VERSION",
+                        "value": "~3"
+                    }
+                ]
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",                 
+                    "properties": {
+                        "AcronisUsername": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('keyVaultName'), '.vault.azure.net/secrets/AcronisUsername/)')]",
+                        "AcronisPassword": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('keyVaultName'), '.vault.azure.net/secrets/AcronisPassword/)')]",
+                        "MailUsername": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('keyVaultName'), '.vault.azure.net/secrets/MailUsername/)')]",
+                        "MailPassword": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('keyVaultName'), '.vault.azure.net/secrets/MailPassword/)')]",
+                        "AzureWebJobsStorage": "[concat('@Microsoft.KeyVault(SecretUri=https://', variables('keyVaultName'), '.vault.azure.net/secrets/AzureWebJobsStorage/)')]",
+                        "UpdateSchedule": "[parameters('UpdateSchedule')]",
+                        "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+                        "FUNCTIONS_EXTENSION_VERSION": "~3",
+                        "FUNCTION_APP_EDIT_MODE": "readonly",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/TobiKr/AcronisAgentUpdater/releases/download/v0.1/AZAcronisUpdater.zip",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('microsoft.insights/components/', variables('appInsightsName')), '2015-05-01').InstrumentationKey]",
+                        "WEBSITE_TIME_ZONE": "[parameters('TimeZone')]",
+                        "AcronisCloudBaseURL": "[parameters('AcronisCloudBaseURL')]",
+                        "ApiTimeOut": "[parameters('ApiTimeOut')]",
+                        "TestMode": "[parameters('TestMode')]",
+                        "ExcludeTenantIds": "[parameters('ExcludeTenantIds')]",
+                        "sendMailNotification": "[parameters('sendMailNotification')]",
+                        "MailServer": "[parameters('MailServer')]",
+                        "MailServerPort": "[parameters('MailServerPort')]",
+                        "MailServerUseTls": "[parameters('MailServerUseTls')]",
+                        "MailAuthenticated": "[parameters('MailAuthenticated')]",
+                        "MailFrom": "[parameters('MailFrom')]",
+                        "MailTo": "[parameters('MailTo')]"                        
+                    },
+                    "dependsOn": [ 
+                        "[resourceId('Microsoft.Web/Sites', variables('functionAppName'))]",
+                        "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]", 
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyvaultName'), 'AcronisUsername')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyvaultName'), 'AcronisPassword')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyvaultName'), 'MailUsername')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyvaultName'), 'MailPassword')]",
+                        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyvaultName'), 'AzureWebJobsStorage')]",                        
+                        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                        "[resourceId('Microsoft.Insights/components', variables('appInsightsName'))]"
+                    ]
+                }
+            ]
+        },
+        {  
+            "apiVersion":"2016-09-01",
+            "type":"Microsoft.Web/serverfarms",            
+            "name":"[variables('hostingPlanName')]",
+            "location":"[resourceGroup().location]",
+            "properties":{  
+                "name":"[variables('hostingPlanName')]",
+                "computeMode":"Dynamic"
+            },
+            "sku":{  
+                "name":"Y1",
+                "tier":"Dynamic",
+                "size":"Y1",
+                "family":"Y",
+                "capacity":0
+            }
+        },
+         {
+            "apiVersion": "2016-10-01",
+            "name": "[variables('keyvaultName')]",
+            "location": "[resourceGroup().location]",
+            "type": "Microsoft.KeyVault/vaults",
+            "properties": {
+                "enabledForDeployment": false,
+                "enabledForTemplateDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enableRbacAuthorization": false,
+                "accessPolicies": [
+                    {
+                    "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('functionAppName')), '2016-08-01', 'Full').identity.principalId]",
+                    "tenantId": "[subscription().tenantId]",
+                    "permissions": {
+                        "keys": [],
+                        "secrets": [
+                            "Get"
+                        ],
+                        "certificates": []
+                    }
+                }
+                ],
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                    "name": "Standard",
+                    "family": "A"
+                },
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "networkAcls": {
+                    "defaultAction": "allow",
+                    "bypass": "AzureServices",
+                    "ipRules": [],
+                    "virtualNetworkRules": []
+                }
+            },
+            "tags": {},
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            ]
+        },        
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/AcronisUsername')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('AcronisUsername')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/AcronisPassword')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('AcronisPassword')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/MailUsername')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('MailUsername')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/MailPassword')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('MailPassword')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2016-10-01",
+            "name": "[concat(variables('keyvaultName'), '/AzureWebJobsStorage')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+            ],
+            "properties": {
+                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')),'2019-06-01').keys[0].value)]"
+            }
+        }        
+    ]
+    
+}
