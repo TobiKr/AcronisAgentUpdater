@@ -194,7 +194,7 @@
                         "FUNCTIONS_WORKER_RUNTIME": "dotnet",
                         "FUNCTIONS_EXTENSION_VERSION": "~3",
                         "FUNCTION_APP_EDIT_MODE": "readonly",
-                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/TobiKr/AcronisAgentUpdater/releases/download/v0.1/AZAcronisUpdater.zip",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/TobiKr/AcronisAgentUpdater/releases/download/v0.2/AZAcronisUpdater.zip",
                         "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('microsoft.insights/components/', variables('appInsightsName')), '2015-05-01').InstrumentationKey]",
                         "WEBSITE_TIME_ZONE": "[parameters('TimeZone')]",
                         "AcronisCloudBaseURL": "[parameters('AcronisCloudBaseURL')]",
