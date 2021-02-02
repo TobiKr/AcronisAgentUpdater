@@ -70,7 +70,7 @@ namespace azuregeek.AZAcronisUpdater.AcronisAPI
             _updateTenantsMaxDepth = 0;
             _signedInUser = await GetUser();
             _signedInTenant = await GetTenant(SignedInUser.TenantID);
-
+            _signedInTenant.TenantUsers = await GetUsersForTenant(SignedInUser.TenantID);
             _authToken = ((IAcronisAuthenticator)_client.Authenticator).AuthToken;
             _authenticated = true;
 
@@ -101,7 +101,7 @@ namespace azuregeek.AZAcronisUpdater.AcronisAPI
                 _authenticated = true;
                 _scopedAuth = true;
 
-                _log.LogDebug($"Scoped authentication into tenant ID {signIntoTenantId} successful");                
+                _log.LogDebug($"Scoped authentication into tenant ID {signIntoTenantId} succeeded");                
             }
             else
                 throw new InvalidOperationException("Top Tenant API client has to be authenticated first");
