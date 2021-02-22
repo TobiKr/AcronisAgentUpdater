@@ -36,7 +36,7 @@ namespace azuregeek.AZAcronisUpdater
             bool testMode = Convert.ToBoolean(GetEnvironmentVariable("TestMode"));
             
             // define variables
-            List<Guid> excludeTenantList = new List<Guid>();
+            List<Guid> excludeTenantList = new List<Guid>();            
             string updateRunDateTime = DateTime.Now.ToString("s");
             int agentUpdatedCounter = 0;
 
@@ -159,7 +159,24 @@ namespace azuregeek.AZAcronisUpdater
                 string mailUsername = GetEnvironmentVariable("MailUsername", true);
                 string mailPassword = GetEnvironmentVariable("MailPassword", true);
                 MailboxAddress mailFromAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailFrom"));
-                MailboxAddress mailToAddress = MailboxAddress.Parse(GetEnvironmentVariable("MailTo"));
+                List<MailboxAddress> mailToAddresses = new List<MailboxAddress>();
+
+                // Get array of to addresses
+
+                string[] toAddressesStr = GetEnvironmentVariable("MailTo").Split(",");
+                foreach (string toAddressStr in toAddressesStr)
+                {
+                    try
+                    {
+                        MailboxAddress toAddress = MailboxAddress.Parse(toAddressStr);
+                        mailToAddresses.Add(toAddress);
+                        log.LogDebug($"Added {toAddressesStr} to status mail recipient list");
+                    }
+                    catch
+                    {
+                        log.LogError($"Failed to parse email address {toAddressStr}");
+                    }
+                }
 
                 log.LogDebug($"E-Mail notification in the making...");
 
@@ -177,8 +194,8 @@ namespace azuregeek.AZAcronisUpdater
                     mailUsername,
                     mailPassword);
 
-                mailController.sendAgentUpdateTable(mailFromAddress, mailToAddress, updateTable);
-                log.LogInformation($"Status Mail sent to {mailToAddress}");
+                mailController.sendAgentUpdateTable(mailFromAddress, mailToAddresses, updateTable);
+                log.LogInformation($"Status Mail sent");
             }            
             log.LogInformation($"Updated {agentUpdatedCounter} agents :-)");
         }

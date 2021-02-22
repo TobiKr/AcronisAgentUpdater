@@ -36,7 +36,7 @@ namespace azuregeek.AZAcronisUpdater.EMail
             smtpClient.Send(message);                   
         }
 
-        public void sendAgentUpdateTable(MailboxAddress fromAddress, MailboxAddress toAddress, List<AgentUpdateEntity> updateTable)
+        public void sendAgentUpdateTable(MailboxAddress fromAddress, List<MailboxAddress> toAddresses, List<AgentUpdateEntity> updateTable)
         {
             string htmlUpdateTable = generateHtmlUpdateTable(updateTable);
             StringBuilder htmlBodyBuilder = new StringBuilder();
@@ -45,7 +45,7 @@ namespace azuregeek.AZAcronisUpdater.EMail
             htmlBodyBuilder.Append("<head>");
             htmlBodyBuilder.Append("</head>");
             htmlBodyBuilder.Append("<body>");
-            htmlBodyBuilder.Append($"<p>Hi {toAddress},<br />");
+            htmlBodyBuilder.Append($"<p>Hi,<br />");
             htmlBodyBuilder.Append("<br />");
             htmlBodyBuilder.Append("the following Agents have been updated by <a href=\"https://github.com/TobiKr/AcronisAgentUpdater\">AcronisAgentUpdater</a>:<br />");
             htmlBodyBuilder.Append("<br />");
@@ -59,9 +59,13 @@ namespace azuregeek.AZAcronisUpdater.EMail
             bodyBuilder.TextBody = "Please switch to HTML view to show updated Agents.";
 
             MimeMessage message = new MimeMessage();
-            message.From.Add(fromAddress);
-            message.To.Add(toAddress);            
+            message.From.Add(fromAddress);                    
             message.Body = bodyBuilder.ToMessageBody();
+
+            foreach(MailboxAddress toAddress in toAddresses)
+            {
+                message.To.Add(toAddress);
+            }
 
             if(updateTable.Count == 1)
                 message.Subject = $"Acronis Agent Updater updated {updateTable.Count} Agent :-)";
