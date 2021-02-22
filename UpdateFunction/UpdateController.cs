@@ -170,7 +170,7 @@ namespace azuregeek.AZAcronisUpdater
                     {
                         MailboxAddress toAddress = MailboxAddress.Parse(toAddressStr);
                         mailToAddresses.Add(toAddress);
-                        log.LogDebug($"Added {toAddressesStr} to status mail recipient list");
+                        log.LogDebug($"Added {toAddressStr} to status mail recipient list");
                     }
                     catch
                     {
